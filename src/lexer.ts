@@ -63,7 +63,6 @@ export class Lexer {
       }
     }
 
-    console.log(this.tokens);
     return this.tokens;
   }
 
@@ -104,6 +103,6 @@ export class Lexer {
   whitespace() {
     do {
       this.currentCharacterIndex++;
-    } while (isWhitespace(this.input[this.currentCharacterIndex]));
+    } while (this.currentCharacterIndex < this.input.length && isWhitespace(this.input[this.currentCharacterIndex]));
   }
 }
