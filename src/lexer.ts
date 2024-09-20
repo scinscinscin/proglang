@@ -5,7 +5,7 @@ export type TokenType =
   | "KEYWORD"
   | (typeof symbolMapping)[keyof typeof symbolMapping];
 
-const keywords = ["if", "else", "while", "for", "return", "true", "false", "class", "import"] as const;
+const keywords = ["if", "else", "while", "for", "return", "true", "false", "class", "import", "new"] as const;
 export type Keyword = (typeof keywords)[number];
 const isKeyword = (keyword: string): keyword is Keyword => keywords.includes(keyword as Keyword);
 

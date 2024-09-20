@@ -15,7 +15,7 @@ async function main() {
   const standardLibrary = createStandardLibrary();
   const interpreter = new Interpreter(standardLibrary);
 
-  console.log({ tokens, statements, standardLibrary, interpreter });
+  // console.log({ tokens, statements, standardLibrary, interpreter });
   for (const statement of statements) {
     statement.visit(interpreter);
   }

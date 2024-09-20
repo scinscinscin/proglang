@@ -1,7 +1,7 @@
 import { Expression } from "./Expression";
 import { Interpreter } from "./Interpreter";
 import { Token } from "./lexer";
-import { ClassValue, StringValue, UserDefinedMethodValue } from "./Value";
+import { UserDefinedClassValue, StringValue, UserDefinedMethodValue, NullValue } from "./Value";
 
 export abstract class Statement {
   abstract visit(interpreter: Interpreter);
@@ -45,7 +45,7 @@ export class ClassDeclarationStatement extends Statement {
   }
 
   visit(interpreter: Interpreter) {
-    const newClass = new ClassValue(this.methods, interpreter.environment);
+    const newClass = new UserDefinedClassValue(this.methods, interpreter.environment);
     interpreter.environment.setValue(this.name.lexeme, newClass);
   }
 }
@@ -65,7 +65,7 @@ export class ExecuteMainStatement extends Statement {
     const environmentKeys = interpreter.environment.getKeys();
     for (const key of environmentKeys) {
       const classValue = interpreter.environment.getValue(key);
-      if (classValue instanceof ClassValue && classValue.hasMainMethod()) {
+      if (classValue instanceof UserDefinedClassValue && classValue.hasMainMethod()) {
         const mainMethod = classValue.statics.get("main");
 
         if (mainMethod instanceof UserDefinedMethodValue) {
@@ -76,5 +76,15 @@ export class ExecuteMainStatement extends Statement {
     }
 
     throw new Error("No main method found");
+  }
+}
+
+export class VariableDeclarationStatement extends Statement {
+  constructor(public type: TypeDefinition, public name: Token, public value: Expression | null) {
+    super();
+  }
+
+  visit(interpreter: Interpreter) {
+    interpreter.environment.setValue(this.name.lexeme, this.value ? this.value.evaluate(interpreter) : new NullValue());
   }
 }

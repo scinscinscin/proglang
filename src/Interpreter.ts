@@ -1,6 +1,7 @@
 import { Token } from "./lexer";
 import { MethodDeclaration } from "./Statement";
-import { ClassInstanceValue, InternalMethodValue, StringValue, Value } from "./Value";
+import { getInput } from "./stdlib/stdin";
+import { ClassInstanceValue, InternalClassValue, InternalMethodValue, NullValue, StringValue, Value } from "./Value";
 
 export class Environment {
   parent?: Environment;
@@ -14,7 +15,7 @@ export class Environment {
   getValue(name: string): Value {
     if (this.underlying.has(name)) return this.underlying.get(name)!;
     else if (this.parent) return this.parent.getValue(name);
-    else throw new Error("Undefined variable");
+    else throw new Error(`Undefined variable: ${name}`);
   }
 
   setValue(name: string, value: Value) {
@@ -34,13 +35,27 @@ export function createStandardLibrary() {
     [{ name: "value", type: { base: new Token(), dim: 0 } }],
     (value) => {
       console.log(value.value);
-      return null as any as Value; // TODO will break
+      return new NullValue();
     }
   );
 
-  const out = new ClassInstanceValue(new Map([["println", println]]));
-  const System = new ClassInstanceValue(new Map([["out", out]]));
+  const System = new ClassInstanceValue(new Map([["out", new ClassInstanceValue(new Map([["println", println]]))]]));
   environment.setValue("System", System);
+
+  const Scanner = new InternalClassValue(
+    new Map(),
+    new Map([
+      [
+        "nextLine",
+        new InternalMethodValue(environment, [], () => {
+          const input = getInput();
+          return new StringValue(input);
+        }),
+      ],
+    ])
+  );
+
+  environment.setValue("Scanner", Scanner);
 
   return environment;
 }

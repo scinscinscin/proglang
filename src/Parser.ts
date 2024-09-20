@@ -1,4 +1,3 @@
-import fs from "fs/promises";
 import { Token, TokenType } from "./lexer";
 import { StringValue, Value } from "./Value";
 import {
@@ -7,6 +6,7 @@ import {
   ImportStatement,
   MethodDeclaration,
   Statement,
+  VariableDeclarationStatement,
 } from "./Statement";
 import {
   DotAccessExpression,
@@ -41,7 +41,33 @@ export class Parser {
     const currentToken = this.tokens[this.currentTokenIndex];
     if (currentToken.type === "KEYWORD" && currentToken.keyword === "import") return this.parseImportStatement();
     else if (currentToken.type === "KEYWORD" && currentToken.keyword === "class") return this.parseClassDeclaration();
-    else return this.parseExpressionStatement();
+
+    const variableDeclaration = this.tryParseVariableDeclaration();
+    if (variableDeclaration) return variableDeclaration;
+
+    return this.parseExpressionStatement();
+  }
+
+  tryParseVariableDeclaration() {
+    const _shadowCurrentTokenIndex = this.currentTokenIndex;
+    try {
+      const type = this.parseType();
+      const variableName = this.expect("IDENTIFIER");
+
+      if (this.isNext("SEMICOLON")) {
+        this.currentTokenIndex++;
+        return new VariableDeclarationStatement(type, variableName, null);
+      } else if (this.isNext("ASSIGN")) {
+        this.currentTokenIndex++;
+
+        const value = this.parseExpression();
+        this.expect("SEMICOLON");
+        return new VariableDeclarationStatement(type, variableName, value);
+      } else throw new Error("Was not able to build variable declaration");
+    } catch (err) {
+      this.currentTokenIndex = _shadowCurrentTokenIndex;
+      return null;
+    }
   }
 
   parseImportStatement() {
@@ -85,28 +111,35 @@ export class Parser {
   }
 
   parseExpression() {
-    if (this.isNext("IDENTIFIER")) {
-      const identifier = this.expect("IDENTIFIER");
+    if (this.isNext("IDENTIFIER")) return this.parseMethodCallExpression();
+    else if (this.isNext("STRING")) return this.parseLiteralExpression();
+    else if (this.isNext("KEYWORD") && this.tokens[this.currentTokenIndex].keyword === "new")
+      return this.parseNewExpression();
 
-      let expression: Expression = new IdentifierExpression(identifier);
-      if (this.isNext("DOT")) expression = this.parseDotAccessExpression(expression);
+    throw new Error("Was unable to build expression");
+  }
 
-      while (this.isNext("LPAREN")) {
-        this.expect("LPAREN");
-        const args = this.parseArgumentList();
-        this.expect("RPAREN");
+  parseMethodCallExpression() {
+    const identifier = this.expect("IDENTIFIER");
 
-        expression = new MethodCallExpression(expression, args);
-      }
+    let expression: Expression = new IdentifierExpression(identifier);
+    if (this.isNext("DOT")) expression = this.parseDotAccessExpression(expression);
 
-      return expression;
-    } else if (this.isNext("STRING")) {
-      const literalExpression = this.parseLiteralExpression();
-      return literalExpression;
-    } else {
-      console.log(this.tokens[this.currentTokenIndex]);
-      throw new Error("Was unable to build expression");
+    while (this.isNext("LPAREN")) {
+      this.expect("LPAREN");
+      let args = [] as Expression[];
+      if (!this.isNext("RPAREN")) args = this.parseArgumentList();
+      this.expect("RPAREN");
+
+      expression = new MethodCallExpression(expression, args);
     }
+
+    return expression;
+  }
+
+  parseNewExpression() {
+    this.currentTokenIndex++;
+    return this.parseMethodCallExpression();
   }
 
   // TODO: parse other literals
@@ -212,7 +245,6 @@ export class Parser {
       this.currentTokenIndex++;
       return currentToken;
     } else {
-      console.log(currentToken);
       throw new Error(`Expected ${type}, got ${currentToken.type}`);
     }
   }

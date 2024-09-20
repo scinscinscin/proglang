@@ -59,3 +59,9 @@ export class LiteralExpression extends Expression {
     return this.value;
   }
 }
+
+// export class NewExpression extends MethodCallExpression {
+//   constructor(method: Expression, args: Expression[]) {
+//     super(method, args);
+//   }
+// }

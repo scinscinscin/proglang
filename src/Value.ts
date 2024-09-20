@@ -1,6 +1,8 @@
+import { extname } from "path";
 import { Environment, Interpreter } from "./Interpreter";
 import { Token } from "./lexer";
 import { MethodDeclaration, Statement, TypeDefinition } from "./Statement";
+import { Expression } from "./Expression";
 
 export abstract class Value {
   abstract value;
@@ -22,6 +24,18 @@ export class StringValue extends Value {
   }
 }
 
+export class NullValue extends Value {
+  value = "[INTERNAL] NullValue";
+
+  dotAccess(key: string): Value {
+    throw new Error("Null is not dot accessible");
+  }
+
+  callFunction(args: Value[]): Value {
+    throw new Error("Null is not callable");
+  }
+}
+
 export class PackageValue extends Value {
   subenvironment: Environment;
   value = "[INTERNAL] PackageValue";
@@ -40,11 +54,34 @@ export class PackageValue extends Value {
   }
 }
 
-export class ClassValue extends Value {
-  statics: Map<string, Value> = new Map();
-  nonStatics: Map<string, Value> = new Map();
+export abstract class ClassValue extends Value {
+  public statics: Map<string, Value> = new Map();
+  public nonStatics: Map<string, Value> = new Map();
   value = "[INTERNAL] ClassValue";
 
+  dotAccess(key: string): Value {
+    if (this.statics.has(key)) return this.statics.get(key)!;
+    else throw new Error("No value with key");
+  }
+
+  hasMainMethod(): boolean {
+    return this.statics.has("main") && this.statics.get("main")! instanceof UserDefinedMethodValue;
+  }
+}
+
+export class InternalClassValue extends ClassValue {
+  constructor(statics: Map<string, Value>, nonStatics: Map<string, Value>) {
+    super();
+    this.statics = statics;
+    this.nonStatics = nonStatics;
+  }
+
+  callFunction(args: Value[]): Value {
+    return new ClassInstanceValue(this.nonStatics);
+  }
+}
+
+export class UserDefinedClassValue extends ClassValue {
   constructor(methods: MethodDeclaration[], public environment: Environment) {
     super();
 
@@ -57,17 +94,8 @@ export class ClassValue extends Value {
     }
   }
 
-  dotAccess(key: string): Value {
-    if (this.statics.has(key)) return this.statics.get(key)!;
-    else throw new Error("No value with key");
-  }
-
   callFunction(args: Value[]): Value {
     return new UserDefinedClassInstanceValue(this, this.nonStatics);
-  }
-
-  hasMainMethod(): boolean {
-    return this.statics.has("main") && this.statics.get("main")! instanceof UserDefinedMethodValue;
   }
 }
 
@@ -93,7 +121,7 @@ export class ClassInstanceValue extends Value {
 }
 
 export class UserDefinedClassInstanceValue extends ClassInstanceValue {
-  constructor(public classConstructor: ClassValue, properties: Map<string, Value>) {
+  constructor(public classConstructor: UserDefinedClassValue, properties: Map<string, Value>) {
     super(properties);
   }
 
