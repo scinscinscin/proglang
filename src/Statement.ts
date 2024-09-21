@@ -1,7 +1,14 @@
 import { Expression } from "./Expression";
-import { Interpreter } from "./Interpreter";
+import { Environment, Interpreter } from "./Interpreter";
 import { Token } from "./lexer";
-import { UserDefinedClassValue, StringValue, UserDefinedMethodValue, NullValue } from "./Value";
+import {
+  UserDefinedClassValue,
+  StringValue,
+  UserDefinedMethodValue,
+  NullValue,
+  Hashmapish,
+  PackageValue,
+} from "./Value";
 
 export abstract class Statement {
   abstract visit(interpreter: Interpreter);
@@ -24,7 +31,20 @@ export class ImportStatement extends Statement {
   }
 
   visit(interpreter: Interpreter) {
-    console.log("Importing", this.path);
+    const global: Environment = interpreter.environment;
+    let currentEnvironment: Hashmapish = global;
+
+    for (const path of this.path) {
+      if (path === "*") {
+        const allKeys = currentEnvironment.getAllKeys();
+        for (const key of allKeys) global.setValue(key, currentEnvironment.get(key));
+        break;
+      }
+
+      const next = currentEnvironment.get(path);
+      if (!(next instanceof PackageValue)) throw new Error("Tried to import a non-package");
+      currentEnvironment = next as PackageValue;
+    }
   }
 }
 
@@ -64,7 +84,7 @@ export class ExecuteMainStatement extends Statement {
     // Find a class with a main method and execute it
     const environmentKeys = interpreter.environment.getKeys();
     for (const key of environmentKeys) {
-      const classValue = interpreter.environment.getValue(key);
+      const classValue = interpreter.environment.get(key);
       if (classValue instanceof UserDefinedClassValue && classValue.hasMainMethod()) {
         const mainMethod = classValue.statics.get("main");
 

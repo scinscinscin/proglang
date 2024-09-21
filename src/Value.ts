@@ -36,17 +36,30 @@ export class NullValue extends Value {
   }
 }
 
-export class PackageValue extends Value {
-  subenvironment: Environment;
+export interface Hashmapish {
+  get(key: string): Value;
+  getAllKeys(): string[];
+}
+
+export class PackageValue extends Value implements Hashmapish {
   value = "[INTERNAL] PackageValue";
 
-  constructor(subenvironment: Environment) {
+  constructor(public underlying: Map<string, Value>) {
     super();
-    this.subenvironment = subenvironment;
   }
 
   dotAccess(key: string): Value {
-    return this.subenvironment.getValue(key);
+    return this.get(key);
+  }
+
+  get(key: string): Value {
+    const ret = this.underlying.get(key);
+    if (ret) return ret;
+    else throw new Error("No value with key");
+  }
+
+  getAllKeys(): string[] {
+    return [...this.underlying.keys()];
   }
 
   callFunction(args: Value[]): Value {

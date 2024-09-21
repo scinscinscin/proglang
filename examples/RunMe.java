@@ -1,3 +1,5 @@
+import java.util.*;
+
 class RunMe {
 	public static void main(String[] args) {
 		Scanner scanner = new Scanner();

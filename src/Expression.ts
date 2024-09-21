@@ -14,7 +14,7 @@ export class IdentifierExpression extends Expression {
   }
 
   evaluate(interpreter: Interpreter): Value {
-    return interpreter.environment.getValue(this.identifier.lexeme);
+    return interpreter.environment.get(this.identifier.lexeme);
   }
 }
 
