@@ -24,6 +24,20 @@ export class StringValue extends Value {
   }
 }
 
+export class NumberValue extends Value {
+  constructor(public value: number) {
+    super();
+  }
+
+  dotAccess(key: string): Value {
+    throw new Error("Strings are not dot accessible");
+  }
+
+  callFunction(args: Value[]): Value {
+    throw new Error("Strings are not callable");
+  }
+}
+
 export class NullValue extends Value {
   value = "[INTERNAL] NullValue";
 

@@ -21,6 +21,7 @@ const isAlphanumeric = (character: string) => isAlphabetic(character) || isNumer
 const isWhitespace = (character: string) => character.match(/\s/);
 const symbolMapping = {
   "+": "PLUS",
+  "-": "MINUS",
   ".": "DOT",
   "(": "LPAREN",
   ")": "RPAREN",
@@ -98,6 +99,27 @@ export class Lexer {
 
   number() {
     /** NO OP */
+    let numberString = "";
+    let fractionalPart = "";
+
+    do {
+      numberString += this.input[this.currentCharacterIndex];
+      this.currentCharacterIndex++;
+    } while (isNumeric(this.input[this.currentCharacterIndex]));
+
+    if (this.input[this.currentCharacterIndex] === ".") {
+      this.currentCharacterIndex++;
+
+      if (!isNumeric(this.input[this.currentCharacterIndex]))
+        throw new Error("Failed to create number, expected digit after decimal point");
+
+      while (isNumeric(this.input[this.currentCharacterIndex])) {
+        fractionalPart += this.input[this.currentCharacterIndex];
+        this.currentCharacterIndex++;
+      }
+    }
+
+    return this.tokens.push({ type: "NUMBER", lexeme: numberString + "." + fractionalPart });
   }
 
   whitespace() {

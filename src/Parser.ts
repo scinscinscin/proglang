@@ -1,5 +1,5 @@
 import { Token, TokenType } from "./lexer";
-import { StringValue, Value } from "./Value";
+import { NumberValue, StringValue, Value } from "./Value";
 import {
   ClassDeclarationStatement,
   ExpressionStatement,
@@ -9,6 +9,9 @@ import {
   VariableDeclarationStatement,
 } from "./Statement";
 import {
+  AssignmentExpression,
+  BinaryExpression,
+  BinaryOperator,
   DotAccessExpression,
   Expression,
   IdentifierExpression,
@@ -111,15 +114,55 @@ export class Parser {
   }
 
   parseExpression() {
-    if (this.isNext("IDENTIFIER")) return this.parseMethodCallExpression();
-    else if (this.isNext("STRING")) return this.parseLiteralExpression();
+    return this.parseTerm();
+  }
+
+  parseTerm() {
+    let expression = this.parseFactor();
+
+    while (this.isNext("PLUS") || this.isNext("MINUS")) {
+      const operator = this.expect("PLUS", "MINUS");
+      const right = this.parseFactor();
+      expression = new BinaryExpression(expression, right, operator.type as BinaryOperator);
+    }
+
+    return expression;
+  }
+
+  parseFactor() {
+    let expression = this.parseExpressionEndpoint();
+
+    while (this.isNext("STAR") || this.isNext("SLASH") || this.isNext("PERCENT")) {
+      const operator = this.expect("STAR", "SLASH", "PERCENT");
+      const right = this.parseExpressionEndpoint();
+      expression = new BinaryExpression(expression, right, operator.type as BinaryOperator);
+    }
+
+    return expression;
+  }
+
+  parseAssignmentExpression() {
+    const left = this.parseIdentifierStack();
+
+    if (this.isNext("ASSIGN")) {
+      this.currentTokenIndex++;
+      const right = this.parseExpression();
+      return new AssignmentExpression(left, right);
+    }
+
+    return left;
+  }
+
+  parseExpressionEndpoint() {
+    if (this.isNext("IDENTIFIER")) return this.parseAssignmentExpression();
+    else if (this.isNext("STRING") || this.isNext("NUMBER")) return this.parseLiteralExpression();
     else if (this.isNext("KEYWORD") && this.tokens[this.currentTokenIndex].keyword === "new")
       return this.parseNewExpression();
 
     throw new Error("Was unable to build expression");
   }
 
-  parseMethodCallExpression() {
+  parseIdentifierStack() {
     const identifier = this.expect("IDENTIFIER");
 
     let expression: Expression = new IdentifierExpression(identifier);
@@ -139,12 +182,14 @@ export class Parser {
 
   parseNewExpression() {
     this.currentTokenIndex++;
-    return this.parseMethodCallExpression();
+    return this.parseIdentifierStack();
   }
 
   // TODO: parse other literals
   parseLiteralExpression() {
     if (this.isNext("STRING")) return new LiteralExpression(new StringValue(this.expect("STRING").lexeme));
+    else if (this.isNext("NUMBER"))
+      return new LiteralExpression(new NumberValue(parseFloat(this.expect("NUMBER").lexeme)));
     else throw new Error("Was not able to build literal");
   }
 

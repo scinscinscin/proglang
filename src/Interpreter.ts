@@ -56,7 +56,13 @@ export function createStandardLibrary() {
     }
   );
 
-  const System = new ClassInstanceValue(new Map([["out", new ClassInstanceValue(new Map([["println", println]]))]]));
+  const System = new ClassInstanceValue(
+    new Map([
+      ["out", new ClassInstanceValue(new Map([["println", println]]))],
+      ["in", new ClassInstanceValue(new Map())],
+    ])
+  );
+
   environment.setValue("System", System);
 
   const Scanner = new InternalClassValue(
