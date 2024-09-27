@@ -17,8 +17,10 @@ async function main() {
 
   // console.log({ tokens, statements, standardLibrary, interpreter });
   for (const statement of statements) {
-    statement.visit(interpreter);
+    await statement.visit(interpreter);
   }
+
+  process.exit(0);
 }
 
 main();

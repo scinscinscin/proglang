@@ -3,7 +3,7 @@ import { Token } from "./lexer";
 import { NumberValue, StringValue, Value } from "./Value";
 
 export abstract class Expression {
-  abstract evaluate(interpreter: Interpreter): Value;
+  abstract evaluate(interpreter: Interpreter): Promise<Value>;
   public isLValue = (): this is AssignableExpression => false;
 }
 
@@ -20,7 +20,7 @@ export class IdentifierExpression extends Expression implements AssignableExpres
     this.identifier = identifier;
   }
 
-  evaluate(interpreter: Interpreter): Value {
+  async evaluate(interpreter: Interpreter): Promise<Value> {
     return interpreter.environment.get(this.identifier.lexeme);
   }
 
@@ -39,10 +39,10 @@ export class AssignmentExpression extends Expression {
     this.right = right;
   }
 
-  evaluate(interpreter: Interpreter): Value {
+  async evaluate(interpreter: Interpreter): Promise<Value> {
     if (!this.left.isLValue()) throw new Error("Left side of assignment must be assignable");
 
-    const rightValue = this.right.evaluate(interpreter);
+    const rightValue = await this.right.evaluate(interpreter);
     this.left.assign(interpreter, rightValue);
     return rightValue;
   }
@@ -80,19 +80,19 @@ export class BinaryExpression extends Expression {
     return new NumberValue(result);
   }
 
-  string_string(leftValue: StringValue, rightValue: StringValue) {
-    return new StringValue(leftValue.value + rightValue.value);
+  string_string(left: string, right: string) {
+    return new StringValue(left + right);
   }
 
-  evaluate(interpreter: Interpreter): Value {
-    const leftValue = this.left.evaluate(interpreter);
-    const rightValue = this.right.evaluate(interpreter);
+  async evaluate(interpreter: Interpreter): Promise<Value> {
+    const leftValue = await this.left.evaluate(interpreter);
+    const rightValue = await this.right.evaluate(interpreter);
 
     if (leftValue instanceof NumberValue && rightValue instanceof NumberValue)
       return this.number_number(leftValue, rightValue);
-    else if (leftValue instanceof StringValue && rightValue instanceof StringValue)
-      return this.string_string(leftValue, rightValue);
-    else throw new Error("Binary expressions can only be performed on numbers");
+    else if (leftValue instanceof StringValue) return this.string_string(leftValue.toString(), rightValue.toString());
+
+    throw new Error("Unsupported binary expresion types");
   }
 }
 
@@ -106,8 +106,8 @@ export class DotAccessExpression extends Expression {
     this.parentExpr = parentExpr;
   }
 
-  evaluate(interpreter: Interpreter): Value {
-    const parentValue = this.parentExpr.evaluate(interpreter);
+  async evaluate(interpreter: Interpreter): Promise<Value> {
+    const parentValue = await this.parentExpr.evaluate(interpreter);
     return parentValue.dotAccess(this.identifier.lexeme);
   }
 }
@@ -122,9 +122,9 @@ export class MethodCallExpression extends Expression {
     this.args = args;
   }
 
-  evaluate(interpreter: Interpreter): Value {
-    const methodValue = this.method.evaluate(interpreter);
-    return methodValue.callFunction(this.args.map((arg) => arg.evaluate(interpreter)));
+  async evaluate(interpreter: Interpreter): Promise<Value> {
+    const methodValue = await this.method.evaluate(interpreter);
+    return methodValue.callFunction(await Promise.all(this.args.map((arg) => arg.evaluate(interpreter))));
   }
 }
 
@@ -133,7 +133,7 @@ export class LiteralExpression extends Expression {
     super();
   }
 
-  evaluate(interpreter: Interpreter): Value {
+  async evaluate(interpreter: Interpreter): Promise<Value> {
     return this.value;
   }
 }

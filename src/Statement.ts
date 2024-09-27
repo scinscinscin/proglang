@@ -11,7 +11,7 @@ import {
 } from "./Value";
 
 export abstract class Statement {
-  abstract visit(interpreter: Interpreter);
+  abstract visit(interpreter: Interpreter): Promise<void>;
 }
 
 const accessModifiers = ["public", "private", "protected", "package-private"] as const;
@@ -30,7 +30,7 @@ export class ImportStatement extends Statement {
     this.path = path;
   }
 
-  visit(interpreter: Interpreter) {
+  async visit(interpreter: Interpreter) {
     const global: Environment = interpreter.environment;
     let currentEnvironment: Hashmapish = global;
 
@@ -64,7 +64,7 @@ export class ClassDeclarationStatement extends Statement {
     super();
   }
 
-  visit(interpreter: Interpreter) {
+  async visit(interpreter: Interpreter) {
     const newClass = new UserDefinedClassValue(this.methods, interpreter.environment);
     interpreter.environment.setValue(this.name.lexeme, newClass);
   }
@@ -74,13 +74,14 @@ export class ExpressionStatement extends Statement {
   constructor(public expression: Expression) {
     super();
   }
-  visit(interpreter: Interpreter) {
-    this.expression.evaluate(interpreter);
+
+  async visit(interpreter: Interpreter) {
+    await this.expression.evaluate(interpreter);
   }
 }
 
 export class ExecuteMainStatement extends Statement {
-  visit(interpreter: Interpreter) {
+  async visit(interpreter: Interpreter) {
     // Find a class with a main method and execute it
     const environmentKeys = interpreter.environment.getKeys();
     for (const key of environmentKeys) {
@@ -89,7 +90,7 @@ export class ExecuteMainStatement extends Statement {
         const mainMethod = classValue.statics.get("main");
 
         if (mainMethod instanceof UserDefinedMethodValue) {
-          mainMethod.callFunction([new StringValue("Hello World")]);
+          await mainMethod.callFunction([new StringValue("Hello World")]);
           return;
         }
       }
@@ -104,7 +105,10 @@ export class VariableDeclarationStatement extends Statement {
     super();
   }
 
-  visit(interpreter: Interpreter) {
-    interpreter.environment.setValue(this.name.lexeme, this.value ? this.value.evaluate(interpreter) : new NullValue());
+  async visit(interpreter: Interpreter) {
+    interpreter.environment.setValue(
+      this.name.lexeme,
+      this.value ? await this.value.evaluate(interpreter) : new NullValue()
+    );
   }
 }

@@ -290,7 +290,7 @@ export class Parser {
       this.currentTokenIndex++;
       return currentToken;
     } else {
-      throw new Error(`Expected ${type}, got ${currentToken.type}`);
+      throw new Error(`Expected ${type}, got ${currentToken.type}, lexeme: ${currentToken.lexeme}`);
     }
   }
 

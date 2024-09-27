@@ -7,7 +7,8 @@ import { Expression } from "./Expression";
 export abstract class Value {
   abstract value;
   abstract dotAccess(key: string): Value; // throws an error if the value is not dot accessible
-  abstract callFunction(args: Value[]): Value; // throws an error if the value is not callable
+  abstract callFunction(args: Value[]): Promise<Value>; // throws an error if the value is not callable
+  abstract toString(): string;
 }
 
 export class StringValue extends Value {
@@ -19,9 +20,11 @@ export class StringValue extends Value {
     throw new Error("Strings are not dot accessible");
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     throw new Error("Strings are not callable");
   }
+
+  toString = () => this.value;
 }
 
 export class NumberValue extends Value {
@@ -30,22 +33,25 @@ export class NumberValue extends Value {
   }
 
   dotAccess(key: string): Value {
-    throw new Error("Strings are not dot accessible");
+    throw new Error("Numbers are not dot accessible");
   }
 
-  callFunction(args: Value[]): Value {
-    throw new Error("Strings are not callable");
+  async callFunction(args: Value[]): Promise<Value> {
+    throw new Error("Numbers are not callable");
   }
+
+  toString = () => this.value.toString();
 }
 
 export class NullValue extends Value {
-  value = "[INTERNAL] NullValue";
+  value = "null";
+  toString = () => this.value.toString();
 
   dotAccess(key: string): Value {
     throw new Error("Null is not dot accessible");
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     throw new Error("Null is not callable");
   }
 }
@@ -57,6 +63,7 @@ export interface Hashmapish {
 
 export class PackageValue extends Value implements Hashmapish {
   value = "[INTERNAL] PackageValue";
+  toString = () => this.value;
 
   constructor(public underlying: Map<string, Value>) {
     super();
@@ -76,7 +83,7 @@ export class PackageValue extends Value implements Hashmapish {
     return [...this.underlying.keys()];
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     throw new Error("Packages are not callable");
   }
 }
@@ -84,7 +91,9 @@ export class PackageValue extends Value implements Hashmapish {
 export abstract class ClassValue extends Value {
   public statics: Map<string, Value> = new Map();
   public nonStatics: Map<string, Value> = new Map();
+
   value = "[INTERNAL] ClassValue";
+  toString = () => this.value;
 
   dotAccess(key: string): Value {
     if (this.statics.has(key)) return this.statics.get(key)!;
@@ -103,7 +112,7 @@ export class InternalClassValue extends ClassValue {
     this.nonStatics = nonStatics;
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     return new ClassInstanceValue(this.nonStatics);
   }
 }
@@ -121,13 +130,15 @@ export class UserDefinedClassValue extends ClassValue {
     }
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     return new UserDefinedClassInstanceValue(this, this.nonStatics);
   }
 }
 
 export class ClassInstanceValue extends Value {
   value = "[INTERNAL] ClassInstanceValue";
+  toString = () => this.value;
+
   underlying: Map<string, Value> = new Map();
 
   constructor(properties: Map<string, Value>) {
@@ -139,10 +150,10 @@ export class ClassInstanceValue extends Value {
 
   dotAccess(key: string): Value {
     if (this.underlying.has(key)) return this.underlying.get(key)!;
-    else throw new Error("No value with key");
+    else throw new Error(`No value with key: "${key}"`);
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     throw new Error("Class instances are not callable");
   }
 }
@@ -160,6 +171,7 @@ export class UserDefinedClassInstanceValue extends ClassInstanceValue {
 
 export abstract class MethodValue extends Value {
   value = "[INTERNAL] MethodValue";
+  toString = () => this.value;
 
   environment: Environment;
   abstract parameters: { type: TypeDefinition; name: string }[];
@@ -173,7 +185,7 @@ export abstract class MethodValue extends Value {
     throw new Error("Methods are not dot accessible");
   }
 
-  abstract callFunction(args: Value[]): Value;
+  abstract callFunction(args: Value[]): Promise<Value>;
 }
 
 export class UserDefinedMethodValue extends MethodValue {
@@ -186,7 +198,7 @@ export class UserDefinedMethodValue extends MethodValue {
     this.parameters = methodDeclaration.parameters.map((e) => ({ type: e.type, name: e.name.lexeme }));
   }
 
-  callFunction(args: Value[]): Value {
+  async callFunction(args: Value[]): Promise<Value> {
     if (args.length !== this.parameters.length)
       throw new Error(`Wrong number of arguments. Expected ${this.parameters.length}, got ${args.length}`);
 
@@ -197,7 +209,7 @@ export class UserDefinedMethodValue extends MethodValue {
     }
 
     for (const statement of this.body) {
-      statement.visit(new Interpreter(newEnvironment));
+      await statement.visit(new Interpreter(newEnvironment));
     }
 
     return null as any;
@@ -208,13 +220,14 @@ export class InternalMethodValue<ArgValues extends Value[]> extends MethodValue 
   constructor(
     environment: Environment,
     public parameters: { type: TypeDefinition; name: string }[],
-    public implementation: (...parameters: ArgValues) => Value
+    public implementation: (...parameters: ArgValues) => Promise<Value>,
+    public varArgs = false
   ) {
     super(environment);
   }
 
-  callFunction(args: Value[]): Value {
-    if (args.length !== this.parameters.length)
+  async callFunction(args: Value[]): Promise<Value> {
+    if (!this.varArgs && args.length !== this.parameters.length)
       throw new Error(`Wrong number of arguments. Expected ${this.parameters.length}, got ${args.length}`);
 
     const newEnvironment = new Environment(this.environment);
@@ -223,6 +236,6 @@ export class InternalMethodValue<ArgValues extends Value[]> extends MethodValue 
       newEnvironment.setValue(parameter.name, args[i]);
     }
 
-    return this.implementation(...(args as any));
+    return await this.implementation(...(args as any));
   }
 }

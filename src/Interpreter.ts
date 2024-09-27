@@ -1,5 +1,5 @@
 import { Token } from "./lexer";
-import { MethodDeclaration } from "./Statement";
+import util from "util";
 import { getInput } from "./stdlib/stdin";
 import {
   ClassInstanceValue,
@@ -7,6 +7,7 @@ import {
   InternalClassValue,
   InternalMethodValue,
   NullValue,
+  NumberValue,
   PackageValue,
   StringValue,
   Value,
@@ -44,45 +45,79 @@ export class Environment implements Hashmapish {
   }
 }
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function createStandardLibrary() {
   const environment = new Environment();
 
   const println = new InternalMethodValue<[StringValue]>(
     environment,
     [{ name: "value", type: { base: new Token(), dim: 0 } }],
-    (value) => {
-      console.log(value.value);
+    async (value) => {
+      console.log(newLineify(value.value));
       return new NullValue();
     }
   );
 
+  const print = new InternalMethodValue<[StringValue]>(
+    environment,
+    [{ name: "value", type: { base: new Token(), dim: 0 } }],
+    async (value) => {
+      process.stdout.write(newLineify(value.value));
+      await delay(120);
+      return new NullValue();
+    }
+  );
+
+  const printf = new InternalMethodValue<[StringValue]>(
+    environment,
+    [{ name: "value", type: { base: new Token(), dim: 0 } }],
+    async (format, ...values) => {
+      const string = util.format(format.value, ...values.map((value) => (value as Value).toString()));
+      process.stdout.write(newLineify(string));
+      await delay(120);
+      return new NullValue();
+    },
+    true // it has varargs
+  );
+
   const System = new ClassInstanceValue(
-    new Map([
-      ["out", new ClassInstanceValue(new Map([["println", println]]))],
-      ["in", new ClassInstanceValue(new Map())],
-    ])
+    createMap({
+      out: new ClassInstanceValue(createMap({ println, print, printf })),
+      in: new ClassInstanceValue(new Map()),
+    })
   );
 
   environment.setValue("System", System);
 
   const Scanner = new InternalClassValue(
     new Map(),
-    new Map([
-      [
-        "nextLine",
-        new InternalMethodValue(environment, [], () => {
-          const input = getInput();
-          return new StringValue(input);
-        }),
-      ],
-    ])
+    createMap({
+      nextLine: new InternalMethodValue(environment, [], async () => new StringValue(await getInput())),
+      nextInt: new InternalMethodValue(environment, [], async () => new NumberValue(_parseInt(await getInput(), 10))),
+      nextFloat: new InternalMethodValue(environment, [], async () => new NumberValue(_parseFloat(await getInput()))),
+    })
   );
 
-  const java = new PackageValue(new Map([["util", new PackageValue(new Map([["Scanner", Scanner]]))]]));
+  const java = new PackageValue(createMap({ util: new PackageValue(createMap({ Scanner: Scanner })) }));
   environment.setValue("java", java);
 
   return environment;
 }
+
+const newLineify = (str: string) => str.replace(/\\n/g, "\n");
+
+const _parseInt = (str: string, radix: number) => {
+  let ret = parseInt(str, radix);
+  return isNaN(ret) ? 0 : ret;
+};
+
+const _parseFloat = (str: string) => {
+  let ret = parseFloat(str);
+  return isNaN(ret) ? 0 : ret;
+};
+
+const createMap = <V>(object: { [key: string]: V }): Map<string, V> => new Map(Object.entries(object));
 
 export class Interpreter {
   public environment: Environment;
